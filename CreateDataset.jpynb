@@ -1,0 +1,125 @@
+# Create dataset
+
+import numpy as np
+import pandas as pd
+from datetime import datetime, timedelta
+
+# Set the random seed for reproducibility
+np.random.seed(42)
+
+# Generate 1000 Patient IDs
+patient_ids = np.arange(1, 1001)
+
+# Generate ages using a continuous uniform distribution to create a smooth transition
+ages = np.random.uniform(0, 80, size=1000)  # Now ages are floating-point numbers
+
+# Generate gender (Male/Female) with roughly equal distribution
+genders = np.random.choice(['Male', 'Female'], size=1000, p=[0.48, 0.52])
+
+# Generate the eye (OD = right eye, OS = left eye), for each patient
+eyes = np.random.choice(['OD', 'OS'], size=1000)
+
+# Generate refractive error in diopters (based on age using a regression model with normal distribution residuals)
+def generate_refractive_error(age):
+    # Regression-based refractive error with normal distribution residuals
+    if age <= 6:
+        # Rapid changes in early childhood with more variation
+        return np.random.normal(1.75, 1)  # Mean: 1.75, SD: 1 (simulating large variability)
+    elif 7 <= age <= 40:
+        # Stabilization in adulthood, emmetropia range with randomness
+        return np.random.normal(-1, 1.5)  # Mean: -1 (closer to emmetropia), SD: 1.5
+    else:
+        # Onset of presbyopia and slight shifts in refractive error with more randomness
+        return np.random.normal(1.25, 0.75)  # Mean: 1.25, SD: 0.75 (more stable in older age)
+
+# Generate Intraocular Pressure (IOP) based on regression equation with normal distribution residuals
+def generate_iop(age):
+    # IOP = 16 + 0.01 * Age with normal residuals
+    return np.random.normal(16 + 0.01 * age, 3)  # SD: 3 mmHg for more variation
+
+# Generate Central Corneal Thickness (CCT) based on regression equation with normal distribution residuals
+def generate_cct(age):
+    # CCT = 550 - 0.1 * Age with normal residuals
+    return np.random.normal(550 - 0.1 * age, 20)  # SD: 20 µm for more variation
+
+# Generate Pupil Diameter based on regression equation with normal distribution residuals
+def generate_pupil_diameter(age):
+    # Pupil Diameter = 6 - 0.05 * Age with normal residuals
+    return np.clip(np.random.normal(6 - 0.05 * age, 1), 1.0, 8.0)  # SD: 1 mm, range: 1.0 to 8.0 mm
+
+# Generate Visual Acuity (logMAR) based on regression equation with normal distribution residuals
+def generate_visual_acuity(age):
+    # Visual Acuity = 0.005 * Age with normal residuals
+    return np.clip(np.random.normal(0.005 * age, 0.1), -0.3, 0.5)  # SD: 0.1 logMAR, range: -0.3 to 0.5
+
+# Generate whether astigmatism is present (Yes/No) with about 30% occurrence
+astigmatisms = np.random.choice(['Yes', 'No'], size=1000, p=[0.3, 0.7])
+
+# Generate exam dates within the past two years
+start_date = datetime.now() - timedelta(days=730)
+exam_dates = [start_date + timedelta(days=np.random.randint(0, 730)) for _ in range(1000)]
+
+# Create the DataFrame and fill it with calculated values
+eye_examination_data = pd.DataFrame({
+    'Patient_ID': patient_ids,
+    'Age': ages,
+    'Gender': genders,
+    'Eye': eyes,
+    'Refractive_Error': [generate_refractive_error(age) for age in ages],
+    'Intraocular_Pressure': [generate_iop(age) for age in ages],
+    'Central_Corneal_Thickness': [generate_cct(age) for age in ages],
+    'Pupil_Diameter': [generate_pupil_diameter(age) for age in ages],
+    'Visual_Acuity_logMAR': [generate_visual_acuity(age) for age in ages],
+    'Astigmatism': astigmatisms,
+    'Exam_Date': exam_dates
+})
+
+# Define the function to assign age groups based on age
+def assign_age_group(age):
+    if age <= 2:
+        return 'Infant'
+    elif 3 <= age <= 12:
+        return 'Child'
+    elif 13 <= age <= 19:
+        return 'Teen'
+    elif 20 <= age <= 39:
+        return 'Young Adult'
+    elif 40 <= age <= 59:
+        return 'Middle-Aged Adult'
+    else:
+        return 'Senior'
+
+# Apply the function to create a new column for Age Group
+eye_examination_data['Age_Group'] = eye_examination_data['Age'].apply(assign_age_group)
+
+# Convert the Age_Group to an ordinal category type with an explicit order
+age_group_categories = ['Infant', 'Child', 'Teen', 'Young Adult', 'Middle-Aged Adult', 'Senior']
+eye_examination_data['Age_Group'] = pd.Categorical(
+    eye_examination_data['Age_Group'],
+    categories=age_group_categories,
+    ordered=True
+)
+
+# Save the final dataset to a CSV file
+eye_examination_data.to_csv('eye_health_population_dataset.csv', index=False)
+print("Saved eye_health_population_dataset.csv")
+
+# Function to save subsets based on a specific column
+def save_subsets(df, column, base_filename):
+    unique_values = df[column].unique()
+    for value in unique_values:
+        subset = df[df[column] == value]
+        # Ensure the filename is safe by replacing or removing problematic characters
+        safe_value = str(value).replace(' ', '_').replace('/', '_')
+        filename = f"{base_filename}_{safe_value}.csv"
+        subset.to_csv(filename, index=False)
+        print(f"Saved {filename}")
+
+# Save subsets based on 'Eye'
+save_subsets(eye_examination_data, 'Eye', 'eye_health_population_dataset')
+
+# Save subsets based on 'Age_Group'
+save_subsets(eye_examination_data, 'Age_Group', 'eye_health_population_dataset')
+
+# Display the first few rows of the main DataFrame
+print(eye_examination_data.head())
